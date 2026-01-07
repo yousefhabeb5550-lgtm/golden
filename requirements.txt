@@ -1,5 +1,5 @@
-streamlit
-yfinance
 pandas
+yfinance
 requests
-pytz
+pandas_ta
+streamlit
