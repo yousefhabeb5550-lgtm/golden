@@ -15,7 +15,7 @@ def send_telegram(msg):
     except:
         pass
 
-# --- دالة حساب RSI ---
+# --- دالة حساب RSI آمنة ---
 def get_rsi(series, window=14):
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
@@ -48,27 +48,32 @@ with st.sidebar:
     st.write("---")
     st.info("تحديث تلقائي كل 15 ثانية لملاحقة السيولة.")
 
-# --- جلب البيانات والتحليل ---
+# --- جلب البيانات والتحليل بنظام حماية ---
 try:
+    # جلب البيانات
     df = yf.download("GBPUSD=X", period="1d", interval="1m", progress=False)
     
-    if not df.empty and len(df) > 20:
-        current_price = round(df['Close'].iloc[-1], 5)
-        ssl_level = round(df['Low'].iloc[-20:-1].min(), 5)
+    # التأكد من أن البيانات ليست فارغة وصحيحة برمجياً
+    if df is not None and not df.empty and len(df) > 20:
+        
+        # استخراج القيم الفردية لضمان عدم حدوث خطأ Series
+        current_price = float(df['Close'].iloc[-1])
+        ssl_level = float(df['Low'].iloc[-20:-1].min())
         
         # حساب RSI
-        rsi_val = round(get_rsi(df['Close']).iloc[-1], 2)
+        rsi_series = get_rsi(df['Close'])
+        rsi_val = round(float(rsi_series.iloc[-1]), 2) if not pd.isna(rsi_series.iloc[-1]) else 50.0
         
-        # منطق الـ SMC (سحب سيولة + ارتداد)
-        is_sweep = df['Low'].iloc[-1] < ssl_level
-        is_rejection = df['Close'].iloc[-1] > ssl_level
-        is_setup = is_sweep and is_rejection
+        # منطق الـ SMC
+        is_sweep = float(df['Low'].iloc[-1]) < ssl_level
+        is_rejection = float(df['Close'].iloc[-1]) > ssl_level
+        is_setup = bool(is_sweep and is_rejection)
 
         # عرض الواجهة
         st.markdown(f"""
             <div class="main-card">
                 <span class="status-badge">🇬🇧 GBP / USD LIVE</span>
-                <div class="price-text">{current_price}</div>
+                <div class="price-text">{current_price:.5f}</div>
                 <div style="margin: 15px 0;">
                     <span style="color: #8b949e;">RSI (14):</span> 
                     <span style="color: {'#ff4b4b' if rsi_val > 70 else '#00ff88'}; font-weight:bold;">{rsi_val}</span>
@@ -77,7 +82,7 @@ try:
                 <div style="display: flex; justify-content: space-around;">
                     <div>
                         <small style="color: #8b949e;">Liquidity (SSL)</small><br>
-                        <b style="font-size: 1.2rem;">{ssl_level}</b>
+                        <b style="font-size: 1.2rem;">{ssl_level:.5f}</b>
                     </div>
                     <div>
                         <small style="color: #8b949e;">Market Structure</small><br>
@@ -90,14 +95,14 @@ try:
         """, unsafe_allow_html=True)
 
         if is_setup:
-            send_telegram(f"🚀 فرصة قنص على الباوند!\nالسعر: {current_price}\nالسبب: سحب سيولة (Liquidity Sweep)")
+            send_telegram(f"🚀 فرصة قنص على الباوند!\nالسعر: {current_price:.5f}\nالسبب: سحب سيولة (Liquidity Sweep)")
             st.balloons()
 
     else:
         st.warning("🔄 جاري انتظار جلب بيانات السوق...")
 
 except Exception as e:
-    st.error(f"حدث خطأ في جلب البيانات: {e}")
+    st.error(f"⚠️ مشكلة فنية مؤقتة في البيانات.. جاري المحاولة مرة أخرى")
 
 # تحديث الصفحة
 time.sleep(15)
