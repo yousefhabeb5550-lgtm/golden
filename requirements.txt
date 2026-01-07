@@ -1,5 +1,4 @@
-pandas
-yfinance
-requests
-pandas_ta
 streamlit
+yfinance
+pandas
+requests
