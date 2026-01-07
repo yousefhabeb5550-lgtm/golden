@@ -2,6 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import requests
+from datetime import datetime
 
 # --- إعدادات التليجرام ---
 TOKEN = "8514661948:AAEBpNWf112SXZ5t5GoOCOR8-iLcwYENil4"
@@ -10,52 +11,102 @@ CHAT_ID = "8541033784"
 def send_alert(message):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": f"🪙 **[قناص الذهب]**\n{message}", "parse_mode": "Markdown"})
+        requests.post(url, data={"chat_id": CHAT_ID, "text": f"🏆 **[GOLD ELITE TERMINAL]**\n{message}", "parse_mode": "Markdown"})
     except: pass
 
-st.set_page_config(page_title="Gold Precise Sync", page_icon="🪙")
+# --- إعدادات الصفحة (Bootstrap Style) ---
+st.set_page_config(page_title="Gold Elite Sniper", page_icon="🏆", layout="wide")
 
-# --- لوحة المعايرة الجانبية ---
-st.sidebar.header("⚖️ موازنة السعر اللحظي")
-manual_offset = st.sidebar.number_input("مقدار التعديل (دولار):", value=-9.15, step=0.01)
+# تصميم الواجهة باستخدام CSS
+st.markdown("""
+    <style>
+    .main { background-color: #0e1117; }
+    .stMetric { background-color: #1e2130; border-radius: 10px; padding: 15px; border: 1px solid #4a4a4a; }
+    .status-card { background: linear-gradient(135deg, #1e2130 0%, #0e1117 100%); border-radius: 15px; padding: 20px; border-left: 5px solid #ffd700; margin-bottom: 20px; }
+    .fvg-card { background: linear-gradient(135deg, #1e2130 0%, #0e1117 100%); border-radius: 15px; padding: 20px; border-left: 5px solid #00ff88; }
+    h1 { color: #ffd700; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    </style>
+    """, unsafe_allow_html=True)
 
-@st.cache_data(ttl=5)
-def get_gold_fast():
+# --- جلب البيانات الاحترافية ---
+@st.cache_data(ttl=2)
+def fetch_gold_pro():
     try:
-        # جلب البيانات الخام
-        df = yf.download("GC=F", period="1d", interval="1m", progress=False)
-        return df
+        # رمز XAUUSD=X هو الأكثر تطابقاً مع أغلب شركات الـ ECN
+        data = yf.download("XAUUSD=X", period="1d", interval="1m", progress=False)
+        return data
     except: return pd.DataFrame()
 
-df = get_gold_fast()
+df = fetch_gold_pro()
 
-st.title("🪙 رادار الذهب (المعايرة اليدوية)")
+# --- القائمة الجانبية للتعديلات الفورية ---
+st.sidebar.title("⚙️ Control Panel")
+offset = st.sidebar.number_input("Price Sync (MT5 Offset)", value=0.00, step=0.01)
+st.sidebar.markdown("---")
+if st.sidebar.button("🚀 Test Connection"):
+    send_alert("System Online - Connection to MT5 Bridge is Stable.")
+    st.sidebar.success("Alert Sent!")
 
-if not df.empty and len(df) > 20:
-    # استخدام .item() لمنع خطأ ValueError الظاهر في صورتك
-    raw_price = float(df['Close'].iloc[-1].item())
-    final_price = round(raw_price + manual_offset, 2)
+# --- الواجهة الرئيسية ---
+st.title("🏆 Gold Elite Terminal")
+st.markdown(f"**Last Sync:** {datetime.now().strftime('%H:%M:%S')} (Real-time)")
+
+if not df.empty and len(df) > 3:
+    # معالجة البيانات
+    current_raw = float(df['Close'].iloc[-1])
+    current_price = round(current_raw + offset, 2)
     
-    # حساب السيولة
-    raw_low_series = df['Low'].iloc[-20:-1]
-    recent_low_raw = float(raw_low_series.min().item())
-    synced_low = round(recent_low_raw + manual_offset, 2)
+    # حساب السيولة (SMC Engine)
+    lows = df['Low'].iloc[-15:-1]
+    raw_liquidity = float(lows.min())
+    synced_liquidity = round(raw_liquidity + offset, 2)
     
-    # عرض السعر الكبير
-    st.metric("سعر منصتك الآن", f"${final_price}")
-    st.write(f"🔍 دعم السيولة في منصتك: {synced_low}")
+    # الكشف عن سحب السيولة
+    is_sweep = (float(df['Low'].iloc[-1]) + offset) < synced_liquidity and current_price > synced_liquidity
 
-    # إصلاح منطق القنص (تحويل كل شيء لـ float صريح)
-    current_low_val = float(df['Low'].iloc[-1].item()) + manual_offset
-    is_sweep = current_low_val < synced_low and final_price > synced_low
+    # --- توزيع العناصر (Bootstrap Grid) ---
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Live Gold Price", f"${current_price:,.2f}")
+    
+    with col2:
+        status_color = "🟢 Stable" if not is_sweep else "🚨 SWEEP DETECTED"
+        st.metric("Market Status", status_color)
+        
+    with col3:
+        st.metric("Session Liquidity", f"${synced_liquidity:,.2f}")
 
+    st.markdown("---")
+
+    # بطاقات المعلومات التفاعلية
+    left_col, right_col = st.columns(2)
+    
+    with left_col:
+        st.markdown(f"""
+        <div class="status-card">
+            <h3>🛡️ Liquidity Analysis</h3>
+            <p>Smart Money is currently monitoring the <b>${synced_liquidity}</b> level.</p>
+            <p><b>Condition:</b> Waiting for a fake breakout (Judas Swing) below this level.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with right_col:
+        fvg_status = "DETECTED" if current_price > (float(df['High'].iloc[-3]) + offset) else "PENDING"
+        st.markdown(f"""
+        <div class="fvg-card">
+            <h3>📈 Momentum (FVG)</h3>
+            <p>Fair Value Gap Status: <b>{fvg_status}</b></p>
+            <p>Ensuring strong institutional displacement before entry.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # نظام الإشعارات الذكي
     if is_sweep:
-        st.success("🎯 سحب سيولة (Sweep) مكتشف الآن!")
-        send_alert(f"فرصة شراء!\nالسعر: {final_price}\nالهدف: {final_price + 1.50}")
-else:
-    st.warning("⚠️ بانتظار اكتمال بيانات السوق... يرجى التحديث بعد ثوانٍ.")
+        st.balloons()
+        st.success("🔥 [SMC ALERT] LIQUIDITY PURGE DETECTED - WATCH FOR REJECTION")
+        send_alert(f"🚀 BUY OPPORTUNITY\nPrice: {current_price}\nTarget: {current_price + 1.5}\nStop: {current_price - 0.5}")
 
-# زر الاختبار
-if st.sidebar.button("🚀 اختبار التطابق"):
-    send_alert(f"فحص السعر المعدل: {final_price}\nهل هذا مطابق تماماً لمنصتك؟")
-    
+else:
+    st.error("Connecting to Global Price Feeds...")
+
