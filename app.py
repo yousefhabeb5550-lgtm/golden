@@ -3,9 +3,8 @@ import yfinance as yf
 import pandas as pd
 import requests
 from datetime import datetime
-import time
 
-# --- 1. الإعدادات الأساسية ---
+# --- إعدادات الهوية والتليجرام ---
 TOKEN = "8514661948:AAEBpNWf112SXZ5t5GoOCOR8-iLcwYENil4"
 CHAT_ID = "8541033784"
 
@@ -15,113 +14,123 @@ def send_alert(message):
         requests.post(url, data={"chat_id": CHAT_ID, "text": f"🏆 **[GOLD ELITE]**\n{message}", "parse_mode": "Markdown"})
     except: pass
 
-# --- 2. تصميم الواجهة الاحترافية (Custom CSS) ---
+# --- تصميم الواجهة الاحترافي (Dark Bootstrap Theme) ---
 st.set_page_config(page_title="Gold Elite Terminal", page_icon="🏆", layout="wide")
 
 st.markdown("""
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #0b0e14 !important; color: #e0e0e0 !important; }
-        .stApp { background-color: #0b0e14; }
-        .main-card { background: #161b22; border: 1px solid #30363d; border-radius: 15px; padding: 25px; margin-bottom: 20px; transition: 0.3s; }
-        .price-text { font-size: 3rem; font-weight: 800; color: #ffd700; text-shadow: 0 0 15px rgba(255, 215, 0, 0.3); }
-        .indicator-badge { border-radius: 50px; padding: 5px 15px; font-size: 0.8rem; font-weight: bold; }
-        .bg-gold { background-color: #ffd700; color: #000; }
-        .bg-danger-custom { background-color: #ff4b4b; color: #fff; }
-        .sidebar-content { background: #161b22; padding: 20px; border-radius: 10px; }
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+    
+    .stApp { background-color: #0b0e14; color: #ffffff; }
+    .main-card {
+        background: linear-gradient(145deg, #161b22, #0d1117);
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        box-shadow: 0 8px 32px 0 rgba(0,0,0,0.8);
+    }
+    .price-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 4rem;
+        font-weight: 700;
+        color: #ffd700;
+        margin: 10px 0;
+        text-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+    }
+    .status-badge {
+        padding: 8px 20px;
+        border-radius: 50px;
+        font-weight: bold;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+    }
+    .bg-live { background-color: #238636; color: white; }
+    .bg-wait { background-color: #8b949e; color: white; }
+    .bg-alert { background-color: #da3633; color: white; animation: pulse 2s infinite; }
+    @keyframes pulse { 0% {opacity: 1;} 50% {opacity: 0.5;} 100% {opacity: 1;} }
     </style>
-""", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
-# --- 3. محرك البيانات (Data Engine) ---
+# --- محرك البيانات الفائق (High-Precision Data Engine) ---
 @st.cache_data(ttl=2)
-def get_mt5_compatible_data():
+def fetch_data():
     try:
-        # الرمز XAUUSD=X هو المرجعية السعرية لسيولة بنوك Saxo و LMAX المعتمدة في MT5
+        # استخدام XAUUSD=X كمرجع أساسي للـ Spot Gold العالمي
         ticker = yf.Ticker("XAUUSD=X")
         df = ticker.history(period="1d", interval="1m")
         return df
     except: return pd.DataFrame()
 
-# --- 4. لوحة التحكم الجانبية ---
+# --- لوحة التحكم الجانبية (Control Center) ---
 with st.sidebar:
-    st.markdown("<div class='sidebar-content'>", unsafe_allow_html=True)
-    st.title("⚙️ Terminal Settings")
-    price_offset = st.number_input("MT5 Price Calibration (Offset)", value=0.00, step=0.01, format="%.2f")
+    st.markdown("### ⚙️ Calibration Center")
+    # التعديل اليدوي للمطابقة التامة مع MT5
+    offset = st.number_input("MT5 Price Offset", value=0.00, step=0.01, format="%.2f")
     st.markdown("---")
-    st.write("📊 **Connectivity:** High-Speed ECN")
-    st.write("🕒 **Last Sync:** " + datetime.now().strftime("%H:%M:%S"))
-    if st.button("🚀 Force Telegram Ping"):
-        send_alert("System calibrated and ready for sniping.")
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.info("💡 نصيحة: إذا رأيت فرقاً عن منصتك، اضبط الـ Offset لمرة واحدة فقط.")
+    if st.button("🔔 Test Telegram Signal"):
+        send_alert("Terminal Link Established. Monitoring Liquidity Pools...")
 
-# --- 5. المعالجة والواجهة الرئيسية ---
-df = get_mt5_compatible_data()
+# --- منطق معالجة البيانات الرئيسي ---
+df = fetch_data()
 
-if not df.empty and len(df) > 10:
-    # استخراج القيم الفردية لضمان عدم حدوث ValueError
-    current_raw = float(df['Close'].iloc[-1])
-    current_price = round(current_raw + price_offset, 2)
+if not df.empty and len(df) > 5:
+    # استخدام المصفوفات لضمان السرعة والدقة
+    current_raw = df['Close'].iloc[-1]
+    current_price = round(float(current_raw) + offset, 2)
     
-    lows_window = df['Low'].iloc[-20:-1]
-    raw_liquidity = float(lows_window.min())
-    synced_liquidity = round(raw_liquidity + price_offset, 2)
+    # حساب سيولة الـ SMC (آخر 15 شمعة)
+    liquidity_pool_raw = df['Low'].iloc[-15:-1].min()
+    liquidity_pool = round(float(liquidity_pool_raw) + offset, 2)
     
-    # حساب سحب السيولة (SMC Sweep)
-    is_sweep = (float(df['Low'].iloc[-1]) + price_offset) < synced_liquidity and current_price > synced_liquidity
+    # كشف الـ Sweep (كسر القاع ثم الارتداد)
+    is_sweep = (float(df['Low'].iloc[-1]) + offset) < liquidity_pool and current_price > liquidity_pool
 
-    # --- توزيع Grid يشبه Bootstrap ---
+    # --- بناء الواجهة التفاعلية ---
     st.markdown(f"""
-        <div class="container-fluid mt-4">
-            <div class="row">
-                <div class="col-md-8">
-                    <div class="main-card shadow">
-                        <span class="indicator-badge bg-gold mb-2">LIVE FEED</span>
-                        <h1 class="display-6">XAU/USD Spot Price</h1>
-                        <div class="price-text">${current_price:,.2f}</div>
-                        <p class="text-muted">Real-time sync with global liquidity providers.</p>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="main-card shadow h-100">
-                        <span class="indicator-badge bg-info mb-2 text-white">SMC MONITOR</span>
-                        <h4>Market Liquidity</h4>
-                        <div class="mt-4">
-                            <p class="mb-1">Institutional Support (SSL):</p>
-                            <h3 class="text-info">${synced_liquidity:,.2f}</h3>
-                        </div>
-                    </div>
-                </div>
+    <div class="main-card">
+        <span class="status-badge bg-live">Market Feed: Active</span>
+        <h3 style="color: #8b949e; margin-top: 20px;">XAU/USD SPOT</h3>
+        <div class="price-value">${current_price:,.2f}</div>
+        <div style="display: flex; justify-content: center; gap: 30px; margin-top: 20px;">
+            <div>
+                <small style="color: #8b949e;">SUPPORT (SSL)</small><br>
+                <strong style="color: #58a6ff; font-size: 1.2rem;">${liquidity_pool:,.2f}</strong>
             </div>
-            
-            <div class="row mt-4">
-                <div class="col-md-12">
-                    <div class="main-card shadow border-top-gold" style="border-top: 4px solid #ffd700 !important;">
-                        <div class="row align-items-center">
-                            <div class="col-md-9">
-                                <h3>Smart Money Status</h3>
-                                <p class="lead">{'🚨 LIQUIDITY PURGE IN PROGRESS - PREPARE TO ENTER' if is_sweep else '🔍 Monitoring for Judas Swing below current support...'}</p>
-                            </div>
-                            <div class="col-md-3 text-end">
-                                <span class="badge {'bg-success' if not is_sweep else 'bg-danger'} p-3 w-100">
-                                    {'MARKET STABLE' if not is_sweep else 'ALERT: LIQUIDITY SWEEP'}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div style="border-left: 1px solid #30363d;"></div>
+            <div>
+                <small style="color: #8b949e;">SYNC STATUS</small><br>
+                <strong style="color: #ffd700; font-size: 1.2rem;">ECN DIRECT</strong>
             </div>
         </div>
+    </div>
     """, unsafe_allow_html=True)
 
-    if is_sweep:
-        st.balloons()
-        send_alert(f"🚀 BUY SIGNAL\nEntry: {current_price}\nStop: {current_price - 0.5}\nTarget: {current_price + 1.5}")
+    # قسم حالة الخوارزمية
+    st.markdown("---")
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        if is_sweep:
+            st.markdown('<div class="status-badge bg-alert">🚨 LIQUIDITY SWEEP DETECTED - INSTITUTIONAL ENTRY</div>', unsafe_allow_html=True)
+            st.success(f"**إشارة قنص شراء:** السعر تجاوز منطقة السيولة {liquidity_pool} وبدأ بالارتداد.")
+            if 'last_alert' not in st.session_state or st.session_state.last_alert != current_price:
+                send_alert(f"🚀 BUY SIGNAL\nEntry: {current_price}\nTarget: {current_price + 1.5}\nStop: {current_price - 0.6}")
+                st.session_state.last_alert = current_price
+        else:
+            st.markdown('<div class="status-badge bg-wait">🔍 Scanning for Smart Money Footprints...</div>', unsafe_allow_html=True)
+
+    with col2:
+        st.write(f"⏱ **Last Update:** {datetime.now().strftime('%H:%M:%S')}")
 
 else:
+    # واجهة التحميل الاحترافية (تظهر في الصورة الأخيرة التي أرسلتها)
     st.markdown("""
-        <div class="d-flex justify-content-center align-items-center" style="height: 80vh;">
-            <div class="spinner-border text-warning" role="status" style="width: 3rem; height: 3rem;"></div>
-            <h3 class="ms-3 text-warning">Establishing Secure Connection to ECN Feeds...</h3>
+        <div style="text-align: center; margin-top: 100px;">
+            <div class="spinner-border text-warning" role="status" style="width: 4rem; height: 4rem;"></div>
+            <h2 style="color: #ffd700; margin-top: 20px;">Establishing Secure ECN Connection...</h2>
+            <p style="color: #8b949e;">Synchronizing with Global Gold Liquidity Providers</p>
         </div>
     """, unsafe_allow_html=True)
-    
+        
