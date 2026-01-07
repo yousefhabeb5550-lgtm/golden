@@ -17,14 +17,12 @@ st.set_page_config(page_title="Gold Precise Sync", page_icon="🪙")
 
 # --- لوحة المعايرة الجانبية ---
 st.sidebar.header("⚖️ موازنة السعر اللحظي")
-# هنا تضع الفرق الذي تلاحظه (مثلاً لو الرادار 4473 ومنصتك 4464، الفرق هو -9)
 manual_offset = st.sidebar.number_input("مقدار التعديل (دولار):", value=-9.15, step=0.01)
-st.sidebar.info("قم بتغيير هذا الرقم حتى يتطابق السعر الكبير مع سعر منصتك.")
 
-@st.cache_data(ttl=5) # تحديث كل 5 ثوانٍ
+@st.cache_data(ttl=5)
 def get_gold_fast():
     try:
-        # نستخدم الرمز الأساسي ونعالج الفرق يدوياً لضمان السرعة
+        # جلب البيانات الخام
         df = yf.download("GC=F", period="1d", interval="1m", progress=False)
         return df
     except: return pd.DataFrame()
@@ -33,30 +31,31 @@ df = get_gold_fast()
 
 st.title("🪙 رادار الذهب (المعايرة اليدوية)")
 
-if not df.empty:
-    raw_price = float(df['Close'].iloc[-1])
-    # السعر الذي سيظهر لك ويُرسل للتليجرام بعد المعايرة
+if not df.empty and len(df) > 20:
+    # استخدام .item() لمنع خطأ ValueError الظاهر في صورتك
+    raw_price = float(df['Close'].iloc[-1].item())
     final_price = round(raw_price + manual_offset, 2)
     
-    # عرض السعر المطابق
-    st.metric("سعر منصتك الآن", f"${final_price}", delta=f"Offset: {manual_offset}")
-    
-    # حساب السيولة بناءً على السعر المعدل
-    recent_low_raw = float(df['Low'].iloc[-20:-1].min())
+    # حساب السيولة
+    raw_low_series = df['Low'].iloc[-20:-1]
+    recent_low_raw = float(raw_low_series.min().item())
     synced_low = round(recent_low_raw + manual_offset, 2)
     
+    # عرض السعر الكبير
+    st.metric("سعر منصتك الآن", f"${final_price}")
     st.write(f"🔍 دعم السيولة في منصتك: {synced_low}")
 
-    # منطق القنص (SMC)
-    is_sweep = (df['Low'].iloc[-1] + manual_offset) < synced_low and final_price > synced_low
+    # إصلاح منطق القنص (تحويل كل شيء لـ float صريح)
+    current_low_val = float(df['Low'].iloc[-1].item()) + manual_offset
+    is_sweep = current_low_val < synced_low and final_price > synced_low
 
     if is_sweep:
-        st.success("🎯 سحب سيولة! السعر كسر قاع منصتك وعاد.")
-        send_alert(f"فرصة شراء!\nالسعر: {final_price}\nالستوب: {final_price - 0.50}")
-
+        st.success("🎯 سحب سيولة (Sweep) مكتشف الآن!")
+        send_alert(f"فرصة شراء!\nالسعر: {final_price}\nالهدف: {final_price + 1.50}")
 else:
-    st.error("جاري الاتصال... تأكد من تحديث الصفحة")
+    st.warning("⚠️ بانتظار اكتمال بيانات السوق... يرجى التحديث بعد ثوانٍ.")
 
 # زر الاختبار
 if st.sidebar.button("🚀 اختبار التطابق"):
-    send_alert(f"فحص السعر المعدل: {final_price}\nهل هذا مطابق تماماً لما تراه؟")
+    send_alert(f"فحص السعر المعدل: {final_price}\nهل هذا مطابق تماماً لمنصتك؟")
+    
