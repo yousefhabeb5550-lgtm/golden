@@ -8,77 +8,97 @@ import time
 TOKEN = "8514661948:AAEBpNWf112SXZ5t5GoOCOR8-iLcwYENil4"
 CHAT_ID = "8541033784"
 
-def send_gorilla_alert(pair, price, msg):
+def send_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        text = f"🦍 **[GORILLA ALERT: {pair}]**\n💰 Price: {price}\n📝 Status: {msg}"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": text, "timeout": 5})
-    except: pass
+        requests.post(url, data={"chat_id": CHAT_ID, "text": f"🦍 [GBP/USD ALERT]\n{msg}"}, timeout=5)
+    except:
+        pass
 
-# --- واجهة المستخدم ---
-st.set_page_config(page_title="Multi-Radar Pro", page_icon="🦍", layout="wide")
+# --- دالة حساب RSI ---
+def get_rsi(series, window=14):
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+# --- إعدادات الصفحة ---
+st.set_page_config(page_title="GBP/USD Sniper", page_icon="🇬🇧", layout="centered")
 
 st.markdown("""
     <style>
-    body { background-color: #0b0e14 !important; color: white; }
+    body { background-color: #0b0e14; color: white; }
     .stApp { background-color: #0b0e14; }
-    .pair-card { 
-        background: #161b22; border: 1px solid #30363d; border-radius: 12px; 
-        padding: 20px; text-align: center; margin-bottom: 20px;
+    .main-card { 
+        background: #161b22; border: 1px solid #30363d; border-radius: 15px; 
+        padding: 30px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.4);
     }
-    .price-tag { font-family: 'monospace'; font-size: 2.5rem; color: #00ff88; font-weight: bold; }
+    .price-text { font-family: 'monospace'; font-size: 4rem; color: #58a6ff; font-weight: bold; }
+    .status-badge { padding: 5px 15px; border-radius: 50px; background: #21262d; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- محرك التحليل ---
-def analyze_pair(symbol):
-    try:
-        df = yf.download(symbol, period="1d", interval="1m", progress=False)
-        if df.empty or len(df) < 20: return None
-        
-        price = round(df['Close'].iloc[-1], 5)
-        ssl = round(df['Low'].iloc[-20:-1].min(), 5)
-        
-        # SMC Simple Logic: Sweep + Rejection
-        setup = df['Low'].iloc[-1] < ssl and df['Close'].iloc[-1] > ssl
-        
-        return {"price": price, "ssl": ssl, "setup": setup}
-    except: return None
+# --- القائمة الجانبية ---
+with st.sidebar:
+    st.title("🦍 Gorilla Terminal")
+    if st.button("🚀 اختبار اتصال التليجرام"):
+        send_telegram("✅ البوت متصل ويراقب الباوند دولار الآن!")
+        st.success("تم الإرسال!")
+    st.write("---")
+    st.info("تحديث تلقائي كل 15 ثانية لملاحقة السيولة.")
 
-# --- العرض الرئيسي ---
-st.title("🦍 رادار الغوريلا المزدوج")
+# --- جلب البيانات والتحليل ---
+try:
+    df = yf.download("GBPUSD=X", period="1d", interval="1m", progress=False)
+    
+    if not df.empty and len(df) > 20:
+        current_price = round(df['Close'].iloc[-1], 5)
+        ssl_level = round(df['Low'].iloc[-20:-1].min(), 5)
+        
+        # حساب RSI
+        rsi_val = round(get_rsi(df['Close']).iloc[-1], 2)
+        
+        # منطق الـ SMC (سحب سيولة + ارتداد)
+        is_sweep = df['Low'].iloc[-1] < ssl_level
+        is_rejection = df['Close'].iloc[-1] > ssl_level
+        is_setup = is_sweep and is_rejection
 
-col1, col2 = st.columns(2)
-pairs = {"EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X"}
-
-with col1:
-    res1 = analyze_pair(pairs["EUR/USD"])
-    if res1:
+        # عرض الواجهة
         st.markdown(f"""
-        <div class="pair-card">
-            <h3>EUR/USD</h3>
-            <div class="price-tag">{res1['price']}</div>
-            <p>Liquidity (SSL): {res1['ssl']}</p>
-            <h4 style="color: {'#00ff88' if res1['setup'] else '#8b949e'}">
-                {'🚨 ENTRY DETECTED' if res1['setup'] else '🔍 Scanning...'}
-            </h4>
-        </div>
+            <div class="main-card">
+                <span class="status-badge">🇬🇧 GBP / USD LIVE</span>
+                <div class="price-text">{current_price}</div>
+                <div style="margin: 15px 0;">
+                    <span style="color: #8b949e;">RSI (14):</span> 
+                    <span style="color: {'#ff4b4b' if rsi_val > 70 else '#00ff88'}; font-weight:bold;">{rsi_val}</span>
+                </div>
+                <hr style="border-color: #30363d;">
+                <div style="display: flex; justify-content: space-around;">
+                    <div>
+                        <small style="color: #8b949e;">Liquidity (SSL)</small><br>
+                        <b style="font-size: 1.2rem;">{ssl_level}</b>
+                    </div>
+                    <div>
+                        <small style="color: #8b949e;">Market Structure</small><br>
+                        <b style="color: {'#00ff88' if is_setup else '#8b949e'}; font-size: 1.2rem;">
+                            {'🚨 ENTRY!' if is_setup else 'Scanning...'}
+                        </b>
+                    </div>
+                </div>
+            </div>
         """, unsafe_allow_html=True)
 
-with col2:
-    res2 = analyze_pair(pairs["GBP/USD"])
-    if res2:
-        st.markdown(f"""
-        <div class="pair-card">
-            <h3>GBP/USD</h3>
-            <div class="price-tag" style="color:#58a6ff">{res2['price']}</div>
-            <p>Liquidity (SSL): {res2['ssl']}</p>
-            <h4 style="color: {'#00ff88' if res2['setup'] else '#8b949e'}">
-                {'🚨 ENTRY DETECTED' if res2['setup'] else '🔍 Scanning...'}
-            </h4>
-        </div>
-        """, unsafe_allow_html=True)
+        if is_setup:
+            send_telegram(f"🚀 فرصة قنص على الباوند!\nالسعر: {current_price}\nالسبب: سحب سيولة (Liquidity Sweep)")
+            st.balloons()
 
-# التحديث التلقائي
-time.sleep(20)
+    else:
+        st.warning("🔄 جاري انتظار جلب بيانات السوق...")
+
+except Exception as e:
+    st.error(f"حدث خطأ في جلب البيانات: {e}")
+
+# تحديث الصفحة
+time.sleep(15)
 st.rerun()
