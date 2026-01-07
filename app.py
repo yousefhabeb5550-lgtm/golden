@@ -10,51 +10,53 @@ CHAT_ID = "8541033784"
 def send_alert(message):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": f"🪙 **[قناص الذهب النهائي]**\n{message}", "parse_mode": "Markdown"})
+        requests.post(url, data={"chat_id": CHAT_ID, "text": f"🪙 **[قناص الذهب]**\n{message}", "parse_mode": "Markdown"})
     except: pass
 
-st.set_page_config(page_title="Gold Sniper Final Fix", page_icon="🪙")
+st.set_page_config(page_title="Gold Precise Sync", page_icon="🪙")
 
-# --- جلب السعر الفوري المباشر (أدق رمز متاح) ---
-@st.cache_data(ttl=5) # تحديث فائق السرعة كل 5 ثوانٍ
-def get_real_gold():
+# --- لوحة المعايرة الجانبية ---
+st.sidebar.header("⚖️ موازنة السعر اللحظي")
+# هنا تضع الفرق الذي تلاحظه (مثلاً لو الرادار 4473 ومنصتك 4464، الفرق هو -9)
+manual_offset = st.sidebar.number_input("مقدار التعديل (دولار):", value=-9.15, step=0.01)
+st.sidebar.info("قم بتغيير هذا الرقم حتى يتطابق السعر الكبير مع سعر منصتك.")
+
+@st.cache_data(ttl=5) # تحديث كل 5 ثوانٍ
+def get_gold_fast():
     try:
-        # الرمز =X هو الأكثر تطابقاً مع منصات MetaTrader
-        df = yf.download("XAUUSD=X", period="1d", interval="1m", progress=False)
+        # نستخدم الرمز الأساسي ونعالج الفرق يدوياً لضمان السرعة
+        df = yf.download("GC=F", period="1d", interval="1m", progress=False)
         return df
     except: return pd.DataFrame()
 
-df = get_real_gold()
+df = get_gold_fast()
 
-st.title("🪙 قناص الذهب (التطابق التام)")
+st.title("🪙 رادار الذهب (المعايرة اليدوية)")
 
 if not df.empty:
-    # السعر المباشر
-    current_price = round(float(df['Close'].iloc[-1]), 2)
+    raw_price = float(df['Close'].iloc[-1])
+    # السعر الذي سيظهر لك ويُرسل للتليجرام بعد المعايرة
+    final_price = round(raw_price + manual_offset, 2)
     
-    # حساب السيولة SMC
-    recent_low = float(df['Low'].iloc[-20:-1].min())
-    is_sweep = float(df['Low'].iloc[-1]) < recent_low and current_price > recent_low
+    # عرض السعر المطابق
+    st.metric("سعر منصتك الآن", f"${final_price}", delta=f"Offset: {manual_offset}")
+    
+    # حساب السيولة بناءً على السعر المعدل
+    recent_low_raw = float(df['Low'].iloc[-20:-1].min())
+    synced_low = round(recent_low_raw + manual_offset, 2)
+    
+    st.write(f"🔍 دعم السيولة في منصتك: {synced_low}")
 
-    # عرض النتائج
-    st.metric("سعر منصتك المباشر", f"${current_price}")
-    
-    # نظام المعايرة اليدوية الفورية (إذا وجدت فرق سنتات)
-    st.sidebar.markdown("### ⚙️ ضبط دقيق")
-    offset = st.sidebar.slider("تعديل السعر (سنتات):", -5.0, 5.0, 0.0)
-    final_price = round(current_price + offset, 2)
-    
-    if offset != 0:
-        st.subheader(f"✅ السعر المعاير: ${final_price}")
+    # منطق القنص (SMC)
+    is_sweep = (df['Low'].iloc[-1] + manual_offset) < synced_low and final_price > synced_low
 
     if is_sweep:
-        st.success("🎯 سحب سيولة مكتشف! السعر الآن كسر القاع وعاد بقوة.")
-        send_alert(f"دخول شراء الآن!\nالسعر: {final_price}\nالهدف: {final_price + 1.50}")
+        st.success("🎯 سحب سيولة! السعر كسر قاع منصتك وعاد.")
+        send_alert(f"فرصة شراء!\nالسعر: {final_price}\nالستوب: {final_price - 0.50}")
 
 else:
-    st.error("جاري محاولة سحب السعر من القمر الصناعي... انتظر ثواني.")
+    st.error("جاري الاتصال... تأكد من تحديث الصفحة")
 
 # زر الاختبار
-if st.sidebar.button("🚀 أرسل السعر لهاتفي"):
-    send_alert(f"سعر الذهب الآن في الرادار: {current_price}\nهل تطابق مع المنصة؟")
-                     
+if st.sidebar.button("🚀 اختبار التطابق"):
+    send_alert(f"فحص السعر المعدل: {final_price}\nهل هذا مطابق تماماً لما تراه؟")
