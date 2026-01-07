@@ -2,70 +2,60 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import requests
-from datetime import datetime
-import pytz
 
-# --- 1. إعدادات الهوية والتليجرام ---
+# --- إعدادات التليجرام ---
 TOKEN = "8514661948:AAEBpNWf112SXZ5t5GoOCOR8-iLcwYENil4"
 CHAT_ID = "8541033784"
 
-def send_gold_alert(message):
+def send_alert(message):
     try:
         url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
         requests.post(url, data={"chat_id": CHAT_ID, "text": f"🪙 **[قناص الذهب]**\n{message}", "parse_mode": "Markdown"})
-    except Exception as e:
-        st.error(f"خطأ في التليجرام: {e}")
+    except: pass
 
-# --- 2. إعدادات الصفحة ---
-st.set_page_config(page_title="Gold Sniper SMC", page_icon="🪙")
+st.set_page_config(page_title="Gold Sniper Stable", page_icon="🪙")
 
-# --- 3. جلب البيانات (مع معالجة الأخطاء) ---
-@st.cache_data(ttl=30)  # تحديث كل 30 ثانية
-def fetch_data():
+# --- جلب البيانات بطريقة مستقرة ---
+@st.cache_data(ttl=20)
+def get_gold_stable():
     try:
-        # استخدام XAUUSD=X للسعر الفوري
-        data = yf.download(tickers="XAUUSD=X", period="1d", interval="1m", progress=False)
+        # تجربة جلب السعر الفوري المباشر
+        data = yf.download("GC=F", period="1d", interval="1m", progress=False)
+        if data.empty:
+            data = yf.download("XAUUSD=X", period="1d", interval="1m", progress=False)
         return data
-    except Exception as e:
-        st.error(f"خطأ في جلب البيانات: {e}")
+    except:
         return pd.DataFrame()
 
-df = fetch_data()
+df = get_gold_stable()
 
-# --- 4. التحقق من وجود بيانات ---
+st.title("🪙 منصة قنص الذهب (النسخة المستقرة)")
+
 if df.empty or len(df) < 5:
-    st.warning("⚠️ جاري انتظار بيانات السوق... تأكد من اتصال الإنترنت.")
+    st.error("❌ فشل الاتصال بمزود البيانات. يرجى الضغط على زر التحديث.")
+    if st.button("🔄 تحديث البيانات الآن"):
+        st.rerun()
 else:
-    # الحصول على السعر الحالي
-    price = round(float(df['Close'].iloc[-1]), 2)
+    # الحصول على آخر سعر وإزالة أي قيم فارغة
+    last_row = df.iloc[-1]
+    price = round(float(last_row['Close']), 2)
     
-    # --- 5. منطق SMC (بسيط وفعال) ---
-    # سحب سيولة (النظر لآخر 15 دقيقة)
-    recent_low = float(df['Low'].iloc[-15:-1].min())
-    is_sweep = float(df['Low'].iloc[-1]) < recent_low and price > recent_low
+    # حساب السيولة (SMC Logic)
+    recent_low = float(df['Low'].iloc[-20:-1].min())
+    is_sweep = float(last_row['Low']) < recent_low and price > recent_low
     
-    # فجوة سعرية (FVG)
-    has_fvg = float(df['Low'].iloc[-1]) > float(df['High'].iloc[-3])
-
-    # --- 6. الواجهة الرسومية ---
-    st.title("🪙 رادار الذهب (SMC Edition)")
+    # واجهة العرض
+    st.metric("سعر الذهب الحالي", f"${price}")
     
-    col1, col2 = st.columns(2)
-    col1.metric("سعر الذهب (المنصة)", f"${price}")
-    col2.metric("حالة السيولة", "سحب سيولة ✅" if is_sweep else "انتظار...")
+    st.write(f"🔍 أدنى سيولة قريبة (SSL): {recent_low}")
+    
+    if is_sweep:
+        st.success("✅ رصد سحب سيولة! هذه فرصة دخول مؤسساتية.")
+    else:
+        st.info("🔎 السوق في حالة استقرار حالياً.. بانتظار سحب السيولة.")
 
-    if has_fvg:
-        st.success("🔥 تم رصد فجوة سعرية (FVG) - الدخول قوي!")
-
-    # --- 7. إرسال التنبيه ---
-    if is_sweep and has_fvg:
-        if 'last_alert_gold' not in st.session_state or st.session_state.last_alert_gold != price:
-            msg = f"🚀 إشارة شراء مؤكدة!\n💰 السعر: {price}\n🛑 الستوب: {price - 0.50}\n🎯 الهدف: {price + 1.50}"
-            send_gold_alert(msg)
-            st.session_state.last_alert_gold = price
-
-    # --- 8. زر الاختبار (في القائمة الجانبية) ---
-    if st.sidebar.button("🚀 اختبار التليجرام"):
-        send_gold_alert(f"فحص ناجح! السعر الحالي: {price}")
-        st.sidebar.success("تم الإرسال!")
-        
+# القائمة الجانبية للتأكد من العمل
+if st.sidebar.button("🚀 اختبار تليجرام"):
+    send_alert(f"منصة الذهب تعمل! السعر الحالي: {price}")
+    st.sidebar.success("تم الإرسال!")
+    
