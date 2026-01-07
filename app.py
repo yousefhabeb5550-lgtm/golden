@@ -1,64 +1,48 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
 import requests
 
-# --- إعدادات التليجرام ---
+# --- إعداداتك التي تعمل بنجاح ---
+API_KEY = "451c070966a33f11467475f78230533a-0e99b0c2a507c336585189286f03d211"
+ACCOUNT_ID = "101-004-30155050-001"
+# نستخدم XAU_USD وهو المعيار العالمي للذهب الفوري
+SYMBOL = "XAU_USD"
+
 TOKEN = "8514661948:AAEBpNWf112SXZ5t5GoOCOR8-iLcwYENil4"
 CHAT_ID = "8541033784"
 
-def send_alert(message):
+st.set_page_config(page_title="Gold Sniper Final", page_icon="🪙")
+
+def get_oanda_price():
+    # هذا الرابط هو الأكثر استقراراً لجلب السعر اللحظي فقط
+    url = f"https://api-fxpractice.oanda.com/v3/accounts/{ACCOUNT_ID}/pricing"
+    params = {"instruments": SYMBOL}
+    headers = {"Authorization": f"Bearer {API_KEY}"}
     try:
-        url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-        requests.post(url, data={"chat_id": CHAT_ID, "text": f"🪙 **[قناص الذهب]**\n{message}", "parse_mode": "Markdown"})
-    except: pass
+        response = requests.get(url, headers=headers, params=params)
+        if response.status_code == 200:
+            price_data = response.json()['prices'][0]
+            # نأخذ متوسط سعر البيع والشراء ليتطابق مع شارت المنصة
+            return (float(price_data['closeoutBid']) + float(price_data['closeoutAsk'])) / 2
+    except:
+        return None
 
-st.set_page_config(page_title="Gold Price Sync", page_icon="🪙")
+price = get_oanda_price()
 
-# --- التحكم في مطابقة السعر (Sidebar) ---
-st.sidebar.header("⚖️ معايرة السعر")
-offset = st.sidebar.number_input("مقدار الفرق عن منصتك (بالدولار):", value=0.0, step=0.1)
-st.sidebar.info("مثال: إذا كان سعر الرادار 4474 ومنصتك 4464، ضع الرقم -10.0")
+st.title("🪙 قناص الذهب (تزامن Oanda)")
 
-@st.cache_data(ttl=10)
-def get_gold_raw():
-    # نستخدم GC=F لأنه الأكثر استقراراً في البيانات التاريخية
-    df = yf.download("GC=F", period="1d", interval="1m", progress=False)
-    return df
-
-df = get_gold_raw()
-
-if not df.empty:
-    # السعر الأصلي من المصدر
-    raw_price = float(df['Close'].iloc[-1])
-    # السعر المعدل ليطابق منصتك تماماً
-    synced_price = round(raw_price + offset, 2)
+if price:
+    st.metric("سعر منصة Oanda المباشر", f"${price:,.2f}")
+    st.write("✅ هذا السعر يتم جلبه الآن بنفس طريقة اليورو.")
     
-    # حساب السيولة بناءً على السعر المعدل
-    raw_low = float(df['Low'].iloc[-20:-1].min())
-    synced_low = round(raw_low + offset, 2)
-    
-    is_sweep = float(df['Low'].iloc[-1] + offset) < synced_low and synced_price > synced_low
-
-    st.title("🪙 رادار الذهب (نسخة التطابق التام)")
-    
-    col1, col2 = st.columns(2)
-    col1.metric("السعر في الرادار", f"${raw_price:.2f}")
-    col1.caption("سعر المصدر العالمي")
-    
-    col2.metric("السعر في منصتك", f"${synced_price:.2f}", delta=f"{offset}")
-    col2.caption("السعر المعتمد للتداول")
-
-    st.markdown("---")
-    st.write(f"🔍 **سيولة منصتك (SSL):** {synced_low}")
-
-    if is_sweep:
-        st.success("🎯 سحب سيولة! السعر الآن في منصتك كسر القاع وعاد.")
-        send_alert(f"دخول ذهب بسعر منصتك: {synced_price}\nالستوب: {synced_price - 0.50}")
-
+    # زر الاختبار للتليجرام
+    if st.sidebar.button("🚀 اختبار التطابق"):
+        url_tg = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+        msg = f"🪙 سعر الذهب من Oanda الآن: {price:,.2f}\nهل يطابق منصتك؟"
+        requests.post(url_tg, data={"chat_id": CHAT_ID, "text": msg})
+        st.sidebar.success("تم إرسال السعر لهاتفك!")
 else:
-    st.error("جاري الاتصال بالمزود...")
+    st.error("⚠️ فشل في جلب السعر. تأكد أن حساب Oanda يدعم تداول الذهب (XAU/USD).")
 
-if st.sidebar.button("🚀 اختبار التطابق"):
-    send_alert(f"اختبار السعر: {synced_price}\nهل هذا الرقم مطابق لمنصتك الآن؟")
-    
+st.info("💡 ملاحظة: إذا وجدت فرقاً بسيطاً (سنتات)، فهذا طبيعي بسبب سرعة التحديث.")
+        
